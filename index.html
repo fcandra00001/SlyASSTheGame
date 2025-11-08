@@ -22,16 +22,24 @@
     /* background video: prioritize bottom of the frame so Snoopy (at bottom) is visible */
     .bg-video{position:fixed;inset:0;z-index:0;overflow:hidden;pointer-events:none}
     .bg-video video{
-      min-width:100%;
-      min-height:100%;
-      object-fit:cover;
-      /* IMPORTANT: prioritize bottom of the video */
-      object-position: center bottom;
-      /* small tweak to make scaling feel anchored to bottom */
-      transform-origin: center bottom;
-      filter:brightness(0.48) contrast(1.05) saturate(1.03);
-    }
-    /* If you prefer to guarantee the whole video height is visible (may show letterbox on sides), uncomment below:
+  min-width:100%;
+  min-height:100%;
+  object-fit:cover;
+  /* prioritize bottom area to show Snoopy */
+  object-position:center bottom;
+  transform-origin:center bottom;
+  filter:brightness(0.48) contrast(1.05) saturate(1.03);
+}
+
+/* Optional mobile tweaks for even more bottom focus */
+@media (max-width:800px){
+  .bg-video video{ object-position:center 85%; }
+}
+@media (max-width:480px){
+  .bg-video video{ object-position:center 92%; }
+}
+
+    
     .bg-video video{
       object-fit:contain;
       object-position:center bottom;
