@@ -19,10 +19,34 @@
     *{box-sizing:border-box}
     html,body{height:100%;margin:0;font-family: 'Fredoka One', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial; background:#000;color:var(--text);-webkit-font-smoothing:antialiased}
 
-    /* background video */
+    /* background video: prioritize bottom of the frame so Snoopy (at bottom) is visible */
     .bg-video{position:fixed;inset:0;z-index:0;overflow:hidden;pointer-events:none}
-    .bg-video video{min-width:100%;min-height:100%;object-fit:cover;object-position:center center;filter:brightness(0.48) contrast(1.05) saturate(1.03);}
-    .bg-video::after{content:'';position:absolute;inset:0;background:linear-gradient(180deg, rgba(0,0,0,0.18), rgba(0,0,0,0.36));}
+    .bg-video video{
+      min-width:100%;
+      min-height:100%;
+      object-fit:cover;
+      /* IMPORTANT: prioritize bottom of the video */
+      object-position: center bottom;
+      /* small tweak to make scaling feel anchored to bottom */
+      transform-origin: center bottom;
+      filter:brightness(0.48) contrast(1.05) saturate(1.03);
+    }
+    /* If you prefer to guarantee the whole video height is visible (may show letterbox on sides), uncomment below:
+    .bg-video video{
+      object-fit:contain;
+      object-position:center bottom;
+      background:#000;
+    }
+    */
+
+    /* mobile tweak: on narrow screens, push focus even more to bottom */
+    @media (max-width: 800px){
+      .bg-video video{ object-position: center 85%; }
+    }
+    @media (max-width: 480px){
+      /* very narrow phones: push almost to the bottom so the lower area is visible */
+      .bg-video video{ object-position: center 92%; }
+    }
 
     .app{position:relative;z-index:2;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;padding:18px}
 
@@ -102,7 +126,7 @@
     <header>
       <div class="title">
         <h1>Jo Ken Po — Sly Ass</h1>
-        <div class="subtitle">Pick Rock, Paper or Scissors — I hope you smile Sly Ass</div>
+        <div class="subtitle">Pick Rock, Paper or Scissors — watch the chaos unfold</div>
       </div>
 
       <div class="controls">
@@ -155,7 +179,7 @@
       </aside>
     </main>
 
-    <footer>Designed for Sly Ass by another Sly Ass.</footer>
+    <footer>Designed for Sly Ass — polished visual, mobile-friendly.</footer>
   </div>
 
   <!--
