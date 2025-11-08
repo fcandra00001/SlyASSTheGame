@@ -34,7 +34,6 @@
       filter: brightness(0.48) contrast(1.05) saturate(1.03);
     }
 
-    /* mobile tweak: on narrow screens, push focus even more to bottom */
     @media (max-width: 800px){
       .bg-video video{ object-position: center 85%; }
     }
@@ -42,7 +41,17 @@
       .bg-video video{ object-position: center 92%; }
     }
 
-    .app{position:relative;z-index:2;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;padding:18px}
+    .app{position:relative;z-index:2;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;padding:18px;transition:transform 220ms ease}
+    .app.shake{animation:shake 520ms cubic-bezier(.25,.75,.2,1);}
+
+    @keyframes shake{
+      0%{transform:translateY(0)}
+      20%{transform:translateY(-6px) rotate(-0.6deg)}
+      40%{transform:translateY(6px) rotate(0.5deg)}
+      60%{transform:translateY(-4px) rotate(-0.4deg)}
+      80%{transform:translateY(4px) rotate(0.3deg)}
+      100%{transform:translateY(0) rotate(0)}
+    }
 
     header{width:100%;max-width:1200px;display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
     .title{display:flex;flex-direction:column;gap:4px;color:var(--glass-bg);text-shadow:0 8px 28px rgba(0,0,0,0.6)}
@@ -92,8 +101,7 @@
     .victory-title::before{content:'✶';position:absolute;left:-12px;bottom:-10px;font-size:12px;opacity:0.85;color:rgba(255,245,180,0.95);transform:rotate(-12deg);animation:starPop 1300ms infinite 200ms;}
     @keyframes starPop{0%{transform:scale(.6) rotate(0);opacity:0}40%{transform:scale(1.06) rotate(20deg);opacity:1}100%{transform:scale(.9) rotate(40deg);opacity:0}}
 
-    /* loser title: same yellow + rainbow halo like HUD */
-    .loser-title{font-size:18px;font-weight:900;padding:6px 12px;border-radius:10px;display:inline-block;color:#ffd54a;position:relative;Overflow:visible;text-shadow:0 2px 0 rgba(0,0,0,0.15);filter:drop-shadow(0 8px 20px rgba(0,0,0,0.15));}
+    .loser-title{font-size:18px;font-weight:900;padding:6px 12px;border-radius:10px;display:inline-block;color:#ffd54a;position:relative;overflow:visible;text-shadow:0 2px 0 rgba(0,0,0,0.15);filter:drop-shadow(0 8px 20px rgba(0,0,0,0.15));}
     .loser-title::before{content:'';position:absolute;inset:-6px;background:linear-gradient(90deg,#ff6b6b,#ffd166,#8ecae6,#a0e7a0,#c77dff,#ffd6a5);background-size:300% 300%;filter:blur(12px);opacity:0.6;z-index:-2;border-radius:14px;animation:rainbow 9s linear infinite;}
     .loser-title .star{font-size:12px;margin:0 6px;color:rgba(255,250,210,0.95);}
 
@@ -116,11 +124,11 @@
     </video>
   </div>
 
-  <div class="app">
+  <div class="app" id="appContainer">
     <header>
       <div class="title">
         <h1>Jo Ken Po — Sly Ass</h1>
-        <div class="subtitle">Pick Rock, Paper or Scissors — I hope you smile Sly Ass :)</div>
+        <div class="subtitle">Pick Rock, Paper or Scissors. I hope you smile Sly Ass :)</div>
       </div>
 
       <div class="controls">
@@ -149,7 +157,7 @@
       </section>
 
       <aside class="hud">
-        <div class="fancy-hud">
+        <div class="fancy-hud" id="fancyHud">
           <div style="display:flex;justify-content:space-between;align-items:center">
             <strong>Battle Progress</strong>
             <div id="timer">00:00</div>
@@ -184,18 +192,23 @@
   -->
 
   <script>
-    /* ====== Config (tweak these to tune unpredictability) ====== */
+    /* ====== SUPER-CHAOS Config (tweak if you dare) ====== */
     const TOTAL_PER_TYPE = 14;
     const AGENT_SIZE = 40;
-    const CONVERT_COOLDOWN = 420;      // ms
-    const NUDGE_TIMEOUT = 22000;       // ms
-    // --- new chaos/spawn config ---
-    const CRAZY_MOVE_PROB_PER_SECOND = 0.08; // chance per second to trigger a crazy pulse (~8%)
-    const CRAZY_MOVE_FORCE = 3.2;           // impulse magnitude applied during crazy pulse
-    const CRAZY_MOVE_COUNT = 6;             // how many agents get hit in a pulse
-    const SPAWN_NEAR_END_THRESHOLD = 6;     // when agents <= this, near-end spawn becomes possible
-    const SPAWN_NEAR_END_PROB = 0.045;      // per second chance to spawn one (4.5%)
-    const SPAWN_NEAR_END_COOLDOWN = 6500;   // ms between auto-spawns
+    const CONVERT_COOLDOWN = 360;      // ms (shorter so conversions feel punchy)
+    const NUDGE_TIMEOUT = 16000;       // ms
+
+    // CRAZY parameters — increased a lot for "infarto"
+    const CRAZY_MOVE_PROB_PER_SECOND = 0.36; // 36% chance per second to trigger a crazy pulse
+    const CRAZY_MOVE_FORCE = 5.2;           // impulse magnitude (big!)
+    const CRAZY_MOVE_COUNT = 10;            // how many agents get hit by a pulse
+    const CRAZY_MEGA_PROB = 0.06;           // small chance to trigger a Mega-Storm when game is busy
+    const CRAZY_MEGA_MULT = 2.4;            // mega-storm multiplies force
+
+    // spawn near-end — earlier and more often
+    const SPAWN_NEAR_END_THRESHOLD = 8;     // trigger earlier
+    const SPAWN_NEAR_END_PROB = 0.14;       // 14% per second chance to spawn
+    const SPAWN_NEAR_END_COOLDOWN = 2600;   // ms (more frequent)
 
     const EMOJI = { rock: '🪨', paper: '📄', scissors: '✂️' };
     const BEATS = { rock: 'scissors', scissors: 'paper', paper: 'rock' };
@@ -214,6 +227,8 @@
     const timerEl = document.getElementById('timer');
     const confetti = document.getElementById('confetti');
     const endMessageInner = document.getElementById('endMessageInner');
+    const appContainer = document.getElementById('appContainer');
+    const fancyHud = document.getElementById('fancyHud');
 
     let playerChoice = null;
     let agents = [];
@@ -256,8 +271,8 @@
         for(let i=0;i<n;i++){
           const pos = randAroundCenter(280);
           const el = document.createElement('div'); el.className = 'agent '+type; el.dataset.type = type; el.style.left = (pos.x)+'px'; el.style.top = (pos.y)+'px'; el.innerText = EMOJI[type]; arenaInner.appendChild(el);
-          // slightly faster base speed
-          const baseSpeed = 1.3 + Math.random()*2.8;
+          // energy higher: faster base speed
+          const baseSpeed = 1.6 + Math.random()*3.2;
           const angle = Math.random()*Math.PI*2;
           agents.push({el, x:pos.x, y:pos.y, vx:Math.cos(angle)*baseSpeed, vy:Math.sin(angle)*baseSpeed, r:AGENT_SIZE/2, type, nextConvertAllowed:0});
         }
@@ -276,7 +291,7 @@
       const rect = arenaInner.getBoundingClientRect();
       const pos = { x: 40 + Math.random()*(rect.width-80), y: 40 + Math.random()*(rect.height-80) };
       const el = document.createElement('div'); el.className = 'agent '+type; el.dataset.type = type; el.style.left = pos.x + 'px'; el.style.top = pos.y + 'px'; el.innerText = EMOJI[type]; arenaInner.appendChild(el);
-      const baseSpeed = 1.6 + Math.random()*2.6;
+      const baseSpeed = 2.2 + Math.random()*3.4;
       const angle = Math.random()*Math.PI*2;
       agents.push({el, x:pos.x, y:pos.y, vx:Math.cos(angle)*baseSpeed, vy:Math.sin(angle)*baseSpeed, r:AGENT_SIZE/2, type, nextConvertAllowed: performance.now() + 300});
       updateHUD();
@@ -299,31 +314,31 @@
 
       // CRAZY move chance accumulation (per second)
       crazyAccumulator += dt;
-      if(crazyAccumulator >= 0.25){ // check every quarter-second for more even randomness
+      if(crazyAccumulator >= 0.25){
         maybeTriggerCrazyMove(crazyAccumulator);
         crazyAccumulator = 0;
       }
 
       for(let a of agents){
         // tiny wobble so they don't move perfectly straight
-        a.vx += (Math.sin((a.x + a.y + performance.now()/1200) * 0.001) * 0.03);
+        a.vx += (Math.sin((a.x + a.y + performance.now()/900) * 0.001) * 0.04);
 
         a.x += a.vx*dt;
         a.y += a.vy*dt;
 
         // elastic wall bounce
-        if(a.x < 8){ a.x = 8; a.vx = Math.abs(a.vx) * 0.96 + 0.02; }
-        if(a.x > w - 40){ a.x = w-40; a.vx = -Math.abs(a.vx) * 0.96 - 0.02; }
-        if(a.y < 8){ a.y = 8; a.vy = Math.abs(a.vy) * 0.96 + 0.02; }
-        if(a.y > h - 40){ a.y = h-40; a.vy = -Math.abs(a.vy) * 0.96 - 0.02; }
+        if(a.x < 8){ a.x = 8; a.vx = Math.abs(a.vx) * 0.94 + 0.04; }
+        if(a.x > w - 40){ a.x = w-40; a.vx = -Math.abs(a.vx) * 0.94 - 0.04; }
+        if(a.y < 8){ a.y = 8; a.vy = Math.abs(a.vy) * 0.94 + 0.04; }
+        if(a.y > h - 40){ a.y = h-40; a.vy = -Math.abs(a.vy) * 0.94 - 0.04; }
 
         // small friction
-        a.vx *= 0.9994;
-        a.vy *= 0.9994;
+        a.vx *= 0.9991;
+        a.vy *= 0.9991;
 
-        // clamp velocities
-        a.vx = Math.max(-4.0, Math.min(4.0, a.vx));
-        a.vy = Math.max(-4.0, Math.min(4.0, a.vy));
+        // clamp velocities (wider range)
+        a.vx = Math.max(-6.0, Math.min(6.0, a.vx));
+        a.vy = Math.max(-6.0, Math.min(6.0, a.vy));
       }
 
       let anyConversion = false;
@@ -336,14 +351,14 @@
             A.x += nx*overlap; A.y += ny*overlap; B.x -= nx*overlap; B.y -= ny*overlap;
 
             // elastic collision approx
-            const restitution = 0.92;
+            const restitution = 0.94;
             const relVel = (A.vx - B.vx)*nx + (A.vy - B.vy)*ny;
             const jimp = -(1 + restitution) * relVel * 0.5;
             const jx = jimp * nx; const jy = jimp * ny;
             A.vx += jx; A.vy += jy; B.vx -= jx; B.vy -= jy;
 
             // small tangential jitter
-            const tang = 0.08 * (Math.random()-0.5);
+            const tang = 0.12 * (Math.random()-0.5);
             A.vx += -ny * tang; A.vy += nx * tang; B.vx += ny * tang; B.vy += -nx * tang;
 
             // RPS transform with cooldown
@@ -362,21 +377,21 @@
 
       // near-end chaos / spawn
       const now = performance.now();
-      if(!chaosStarted && agents.length <= 10 && agents.length > 1){ chaosStarted = true; lastChaosAt = now; }
-      if(chaosStarted && now - lastChaosAt < 18000){
-        // small periodic pulses handled in the earlier chaos block (keeps unpredictability)
-        if(now - lastChaosAt > 600){
-          for(let k=0;k<Math.min(6, agents.length);k++){ const a = agents[Math.floor(Math.random()*agents.length)]; a.vx += (Math.random()*2-1) * 2.2; a.vy += (Math.random()*2-1) * 2.2; }
-          lastChaosAt = now - (18000 - (now - lastChaosAt));
+      if(!chaosStarted && agents.length <= 12 && agents.length > 1){ chaosStarted = true; lastChaosAt = now; }
+      if(chaosStarted && now - lastChaosAt < 22000){
+        // keep a steady pulsing unpredictability
+        if(now - lastChaosAt > 520){
+          for(let k=0;k<Math.min(8, agents.length);k++){ const a = agents[Math.floor(Math.random()*agents.length)]; a.vx += (Math.random()*2-1) * 2.6; a.vy += (Math.random()*2-1) * 2.6; }
+          lastChaosAt = now - (22000 - (now - lastChaosAt));
         }
       }
 
       // maybe spawn near end (random, with cooldown)
       maybeSpawnNearEnd(now);
 
-      // nudge if stuck long
+      // if game seems stuck, nudge
       if(now - lastConversionAt > NUDGE_TIMEOUT){
-        for(let k=0;k<Math.min(10, agents.length);k++){ const a = agents[Math.floor(Math.random()*agents.length)]; a.vx += (Math.random()*2-1) * 1.6; a.vy += (Math.random()*2-1) * 1.6; }
+        for(let k=0;k<Math.min(10, agents.length);k++){ const a = agents[Math.floor(Math.random()*agents.length)]; a.vx += (Math.random()*2-1) * 2.2; a.vy += (Math.random()*2-1) * 2.2; }
         lastConversionAt = now;
       }
 
@@ -384,17 +399,17 @@
       updateHUD();
     }
 
-    // convert with flash and small kick
+    // convert with flash and big kick
     function convertAgent(target, newType, sourceAgent){
       if(target.type === newType) return;
       target.type = newType; target.el.dataset.type = newType; target.el.className = 'agent ' + newType + ' convert'; target.el.innerText = EMOJI[newType];
       try{ target.el.animate([
         {boxShadow: '0 0 0px rgba(255,255,255,0)'},
-        {boxShadow: '0 18px 56px rgba(255,255,255,0.96)'},
+        {boxShadow: '0 22px 66px rgba(255,255,255,0.98)'},
         {boxShadow: '0 0 0px rgba(255,255,255,0)'}
-      ],{duration:320,easing:'ease-out'}); }catch(e){}
-      if(sourceAgent){ target.vx = (sourceAgent.vx*0.45) + (Math.random()*1.0 - 0.5); target.vy = (sourceAgent.vy*0.45) + (Math.random()*1.0 - 0.5); }
-      setTimeout(()=>{ if(target && target.el) target.el.classList.remove('convert'); },480);
+      ],{duration:300,easing:'ease-out'}); }catch(e){}
+      if(sourceAgent){ target.vx = (sourceAgent.vx*0.6) + (Math.random()*1.4 - 0.7); target.vy = (sourceAgent.vy*0.6) + (Math.random()*1.4 - 0.7); }
+      setTimeout(()=>{ if(target && target.el) target.el.classList.remove('convert'); },520);
     }
 
     function updateHUD(){ const counts = {rock:0,paper:0,scissors:0}; for(let a of agents) counts[a.type]++; countRockEl.textContent = counts.rock; countPaperEl.textContent = counts.paper; countScissorsEl.textContent = counts.scissors; playerScoreEl.textContent = playerScore; piecesLeftEl.textContent = agents.length; }
@@ -407,28 +422,42 @@
       else { titleHTML = `<div class='loser-title'><span class='star'>✶</span>Not this time sly ass — try again.<span class='star'>✶</span></div>`; }
       endMessageInner.innerHTML = `${titleHTML}<div style=\"margin:10px 0;color:rgba(255,230,120,0.98)\">Winner: ${EMOJI[winnerType]} ${capitalize(winnerType)}</div><div><button class='btn-ghost' id='playAgain'><span class='dog'>🐶</span> Restart</button></div>`;
       document.getElementById('playAgain').addEventListener('click', ()=>{ resetGame(); });
-      launchConfetti(playerWon ? 120 : 36);
-      const hud = document.querySelector('.fancy-hud'); hud.animate([{transform:'scale(1)'},{transform:'scale(1.01)'},{transform:'scale(1)'}],{duration:700,easing:'ease-out'});
+      launchConfetti(playerWon ? 160 : 48);
+      // small heartbeat on HUD
+      fancyHud.animate([{transform:'scale(1)'},{transform:'scale(1.06)'},{transform:'scale(1)'}],{duration:760,easing:'ease-out'});
     }
 
-    function launchConfetti(n){ confetti.innerHTML=''; const colors = ['#ff4d4f','#ffb703','#8ecae6','#a0e7a0','#c77dff','#ffd6a5']; for(let i=0;i<n;i++){ const el = document.createElement('div'); el.className = 'piece'; el.style.left = Math.random()*100 + '%'; el.style.top = (-5 - Math.random()*20) + 'vh'; el.style.background = colors[Math.floor(Math.random()*colors.length)]; el.style.transform = 'rotate(' + (Math.random()*360) + 'deg)'; el.style.width = (6 + Math.random()*12) + 'px'; el.style.height = (10 + Math.random()*18) + 'px'; el.style.animationDuration = (1600 + Math.random()*1200) + 'ms'; confetti.appendChild(el); } setTimeout(()=>{ confetti.innerHTML=''; },5200); }
+    function launchConfetti(n){ confetti.innerHTML=''; const colors = ['#ff4d4f','#ffb703','#8ecae6','#a0e7a0','#c77dff','#ffd6a5']; for(let i=0;i<n;i++){ const el = document.createElement('div'); el.className = 'piece'; el.style.left = Math.random()*100 + '%'; el.style.top = (-5 - Math.random()*20) + 'vh'; el.style.background = colors[Math.floor(Math.random()*colors.length)]; el.style.transform = 'rotate(' + (Math.random()*360) + 'deg)'; el.style.width = (6 + Math.random()*12) + 'px'; el.style.height = (10 + Math.random()*18) + 'px'; el.style.animationDuration = (1600 + Math.random()*1200) + 'ms'; confetti.appendChild(el); } setTimeout(()=>{ confetti.innerHTML=''; },6200); }
 
     function capitalize(s){ return s.charAt(0).toUpperCase() + s.slice(1); }
 
     /* ========== NEW: sometimes trigger a sudden "crazy" pulse ========== */
     function maybeTriggerCrazyMove(elapsedSeconds){
-      // convert per-second probability into chance for this check period:
+      // probability for this check period
       const p = 1 - Math.pow(1 - CRAZY_MOVE_PROB_PER_SECOND, elapsedSeconds);
       if(Math.random() < p && agents.length > 3){
-        // apply strong random impulses to a subset of agents
+        // normal crazy pulse
         for(let k=0;k<Math.min(CRAZY_MOVE_COUNT, agents.length);k++){
           const a = agents[Math.floor(Math.random()*agents.length)];
           a.vx += (Math.random()*2-1) * CRAZY_MOVE_FORCE;
           a.vy += (Math.random()*2-1) * CRAZY_MOVE_FORCE;
         }
-        // small visual pulse on HUD
-        const hud = document.querySelector('.fancy-hud');
-        hud.animate([{filter:'brightness(1)'},{filter:'brightness(1.12)'},{filter:'brightness(1)'}],{duration:420, easing:'ease-out'});
+        // HUD flash
+        fancyHud.animate([{filter:'brightness(1)'},{filter:'brightness(1.28)'},{filter:'brightness(1)'}],{duration:440, easing:'ease-out'});
+
+        // tiny chance for MEGA storm (huge pulse + shake)
+        if(Math.random() < CRAZY_MEGA_PROB && agents.length > 6){
+          // mega: apply stronger impulses to many agents
+          for(let k=0;k<Math.min(agents.length, CRAZY_MOVE_COUNT * 2);k++){
+            const a = agents[Math.floor(Math.random()*agents.length)];
+            a.vx += (Math.random()*2-1) * CRAZY_MOVE_FORCE * CRAZY_MEGA_MULT;
+            a.vy += (Math.random()*2-1) * CRAZY_MOVE_FORCE * CRAZY_MEGA_MULT;
+          }
+          // visual: shake app and HUD
+          appContainer.classList.add('shake');
+          setTimeout(()=>appContainer.classList.remove('shake'), 640);
+          fancyHud.animate([{transform:'translateY(0)'},{transform:'translateY(-8px)'},{transform:'translateY(0)'}],{duration:640,easing:'ease-out'});
+        }
       }
     }
 
@@ -436,14 +465,13 @@
     function maybeSpawnNearEnd(now){
       if(agents.length <= SPAWN_NEAR_END_THRESHOLD && agents.length > 1){
         if(now - lastAutoSpawnAt > SPAWN_NEAR_END_COOLDOWN){
-          // chance per second scaled to loop frequency: we check every frame but convert to per-second:
-          const dtSec = Math.min(1, (now - lastAutoSpawnAt)/1000);
+          // probability scaled by time since last auto-spawn
+          const dtSec = Math.min(1.2, (now - lastAutoSpawnAt)/1000);
           if(Math.random() < SPAWN_NEAR_END_PROB * dtSec){
             spawnSingleRandom();
             lastAutoSpawnAt = now;
-            // tiny HUD pulse to signal spawn
-            const hud = document.querySelector('.fancy-hud');
-            hud.animate([{transform:'scale(1)'},{transform:'scale(1.03)'},{transform:'scale(1)'}],{duration:420,easing:'ease-out'});
+            // HUD pulse to signal spawn
+            fancyHud.animate([{transform:'scale(1)'},{transform:'scale(1.05)'},{transform:'scale(1)'}],{duration:360,easing:'ease-out'});
           }
         }
       }
